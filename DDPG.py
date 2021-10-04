@@ -311,7 +311,7 @@ def train(total_episodes=total_episodes):
         plt.ylabel("Avg. Episodic Reward")
         plt.show()
 
-train()
+#train()
 
 def actor(state):
     print("speed = {}".format(state[1]))
