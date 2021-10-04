@@ -25,13 +25,13 @@ The actor is supposed to answer with two actions, both in the range [-1,1]:
   2. turning angle
 Maximum values for acceleration and turning angles can be configured. 
 
-#Available models
+## Available learning models
 We currently equip the code with a basic actor trained with DDPG (weights included). Students are supposed to develop their own models. 
 
-#Requirements
+## Requirements
 The project just requires basic libraries: tensorflow, numpy, pyplotlib and scipy.interpolate (for Cubic Splines). 
 
-#Plans for future work
+## Plans for future work
 We are extremely interested in collaborations, especially with colleagues teaching DRL at other Universities.
 We plan to investigate the following directions
 1. the computation of the lidar signal in pyhton is too slow. We plan to move it to C.
