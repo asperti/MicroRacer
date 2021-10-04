@@ -1,0 +1,4 @@
+This directory contains weights. 
+Please, use this file to recall to what model they belongs to.
+
+ddpg_critic_weigths_32_car3_split.h5  => basic model in DDPG. Two distinct towers for the two actions, each one with 32 units
