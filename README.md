@@ -8,7 +8,7 @@ The complexity of the environment has been explicitly calibrated to allow to exp
 without the need of sophisticated software and no fear of getting bored by too long training times.
 
 ## The MicroRacer environment
-MacroRacer generates new random circular tracks at each episode. The Random track is defined by CubicSplines delimiting the inner and outer border; the number of turns and the width of the track are configurable. From this description we derive a dense matrix of points of dimension 1300x1300 providing information about points inside the track. This is the actual definition of the track used by the environment.
+MicroRacer generates new random circular tracks at each episode. The Random track is defined by CubicSplines delimiting the inner and outer border; the number of turns and the width of the track are configurable. From this description, we derive a dense matrix of points of dimension 1300x1300 providing information about positions inside the track. This is the actual definition of the track used by the environment.
 ![micro_racer](https://user-images.githubusercontent.com/15980090/135791705-cd678320-c189-43b5-84fe-1ceb0dd01f0d.png)
 
 ## State and actions
