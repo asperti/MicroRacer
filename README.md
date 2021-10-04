@@ -28,6 +28,9 @@ Maximum values for acceleration and turning angles can be configured.
 #Available models
 We currently equip the code with a basic actor trained with DDPG (weights included). Students are supposed to develop their own models. 
 
+#Requirements
+The project just requires basic libraries: tensorflow, numpy, pyplotlib and scipy.interpolate (for Cubic Splines). 
+
 #Plans for future work
 We are extremely interested in collaborations, especially with colleagues teaching DRL at other Universities.
 We plan to investigate the following directions
