@@ -32,6 +32,8 @@ We currently equip the code with a basic actor trained with DDPG (weights includ
 The project just requires basic libraries: tensorflow, numpy, pyplotlib and scipy.interpolate (for Cubic Splines). 
 
 ## Plans for future work
+The current version of the MicroRacer is very basic.
+
 We are extremely interested in collaborations, especially with colleagues teaching DRL at other Universities.
 We plan to investigate the following directions
 1. the computation of the lidar signal in pyhton is too slow. We plan to move it to C.
