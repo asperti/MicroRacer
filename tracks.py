@@ -3,6 +3,15 @@ from scipy.interpolate import CubicSpline
 import matplotlib.pyplot as plt
 import matplotlib.animation as animation
 import time
+import pathlib
+
+#generate the compiled and converted files for lidar.pyx using cython in the directory .pyxbld
+#auto recompile them at every edit on lidar.pyx
+pyxbld_dir=pathlib.PurePath.joinpath(pathlib.Path().resolve(), '.pyxbld') 
+import pyximport; pyximport.install(build_dir=pyxbld_dir,reload_support=True, language_level=3)
+import lidar  
+
+
 
 #find border positions at theta, given the midline cs
 #need to move along the perpendicular of the midline direction
@@ -154,45 +163,10 @@ def create_route_map(inner,outer,discr=2000,show_map=False):
         plt.show()
     return(map,True)
 
-#basic function for lidar. given a point (x0,y0) on the track and a direction dirang computes the
-#distance of the border along the given direction
 
-def dist_grid(x0,y0, dirang, map, step=1./100,verbose=False):
-    stepx = step*np.cos(dirang)
-    stepy = step*np.sin(dirang)
-    x = x0
-    y = y0
-    xg = int(x * 500) + 650
-    yg = int(y * 500) + 650
-    if not map[xg,yg]:
-        print(x,y,xg,yg)
-        print(map[xg,yg])
-        assert(map[xg,yg])
-    while (map[xg,yg]):
-        x += stepx
-        y += stepy
-        xg = int(x * 500) + 650
-        yg = int(y * 500) + 650
-    x -= stepx
-    y -= stepy
-    if step == 1./100:
-        #print("reducing step")
-        x, y = dist_grid(x,y, dirang,map,step=1./500,verbose=False)
-    if verbose:
-        print("start at = {}, cross border at {}".format((x0,y0),(x,y)))
-    return x,y
 
 def lidar_grid(x,y,vx,vy,map,angle=np.pi/3,pins=19):
-    dirang = np.arctan2(vy, vx) #car direction
-    obs = np.zeros(pins)
-    i = 0
-    a = dirang - angle/2
-    astep = angle/(pins-1)
-    for i in range(pins):
-        cx,cy = dist_grid(x,y,a,map,verbose=False)
-        obs[i] = ((cx-x)**2+(cy-y)**2)**.5
-        a += astep
-    return obs
+    return lidar.lidar_grid(x,y,vx,vy,map,angle,pins)
 
 #######################################################################################################################
 
