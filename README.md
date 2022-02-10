@@ -29,7 +29,8 @@ Maximum values for acceleration and turning angles can be configured.
 We currently equip the code with a basic actor trained with DDPG (weights included). Students are supposed to develop their own models. 
 
 ## Requirements
-The project just requires basic libraries: tensorflow, numpy, pyplotlib and scipy.interpolate (for Cubic Splines). 
+The project just requires basic libraries: tensorflow, numpy, pyplotlib, scipy.interpolate (for Cubic Splines) and cython. 
+A requirements file is available so you can easily install all the dependencies just using "pip install -r requirements.txt"
 
 ## Plans for future work
 The current version of the MicroRacer is very basic.
