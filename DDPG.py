@@ -1,13 +1,24 @@
 import tensorflow as tf
 from tensorflow.keras import layers
+from tensorflow import keras
 from tensorflow.keras import regularizers
 import numpy as np
 import matplotlib.pyplot as plt
-import tracks
+import tracks 
 
 racer = tracks.Racer()
 
 ########################################
+###### HYPERPARAMETERS #################
+
+total_episodes = 200
+# Discount factor
+gamma = 0.99
+# Target network parameter update factor, for double DQN
+tau = 0.005
+# Learning rate for actor-critic models
+critic_lr = 0.001
+aux_lr = 0.001
 
 num_states = 5 #we reduce the state dim through observation (see below)
 num_actions = 2 #acceleration and steering
@@ -15,8 +26,27 @@ print("State Space dim: {}, Action Space dim: {}".format(num_states,num_actions)
 
 upper_bound = 1
 lower_bound = -1
-
 print("Min and Max Value of Action: {}".format(lower_bound,upper_bound))
+
+buffer_dim = 50000
+batch_size = 64
+
+
+is_training = True
+
+#pesi
+# ddpg_critic_weigths_32_car0_split.h5 #versione con reti distinte per le mosse. Muove bene ma lento
+# ddpg_critic_weigths_32_car1_split.h5 #usual problem: sembra ok
+
+load_weights = False
+save_weights = True #beware when saving weights to not overwrite previous data
+
+#weights_file_actor = "weights/ddpg_actor_weigths_32_car3_split.h5"
+#weights_file_critic = "weights/ddpg_critic_weigths_32_car3_split.h5"
+
+weights_file_actor = "weights/ddpg_actor_model_car"
+weights_file_critic = "weights/ddpg_critic_model_car"
+
 
 #The actor choose the move, given the state
 def get_actor():
@@ -182,16 +212,9 @@ def compose(actor,critic):
 aux_model = compose(actor_model,target_critic)
 
 ## TRAINING ##
-#pesi
-# ddpg_critic_weigths_32_car0_split.h5 #versione con reti distinte per le mosse. Muove bene ma lento
-# ddpg_critic_weigths_32_car1_split.h5 #usual problem: sembra ok
-
-load_weights = True
-save_weights = False #beware when saving weights to not overwrite previous data
-
 if load_weights:
-    critic_model.load_weights("weights/ddpg_critic_weigths_32_car3_split.h5")
-    actor_model.load_weights("weights/ddpg_actor_weigths_32_car3_split.h5")
+    critic_model = keras.models.load_model(weights_file_critic)
+    actor_model = keras.models.load_model(weights_file_actor)
 
 # Making the weights equal initially
 target_actor_weights = actor_model.get_weights()
@@ -199,9 +222,6 @@ target_critic_weights = critic_model.get_weights()
 target_actor.set_weights(target_actor_weights)
 target_critic.set_weights(target_critic_weights)
 
-# Learning rate for actor-critic models
-critic_lr = 0.001
-aux_lr = 0.001
 
 critic_optimizer = tf.keras.optimizers.Adam(critic_lr)
 aux_optimizer = tf.keras.optimizers.Adam(aux_lr)
@@ -209,46 +229,26 @@ aux_optimizer = tf.keras.optimizers.Adam(aux_lr)
 critic_model.compile(loss='mse',optimizer=critic_optimizer)
 aux_model.compile(optimizer=aux_optimizer)
 
-total_episodes = 10
-# Discount factor
-gamma = 0.99
-# Target network parameter update factor, for double DQN
-tau = 0.005
 
-buffer = Buffer(50000, 64)
+buffer = Buffer(buffer_dim, batch_size)
 
 # History of rewards per episode
 ep_reward_list = []
 # Average reward history of last few episodes
-avg_reward_list = []
+avg_reward_list = []         
 
-# custom observation of the state
-# it must return an array to be passed as input to both actor and critic
+# We introduce a probability of doing n empty actions to separate the environment time-step from the agent
+def step(action):
+    n = 1
+    t = np.random.randint(0,n)
+    state ,reward,done = racer.step(action)
+    for i in range(t):
+        if not done:
+            state ,t_r, done = racer.step([0, 0])
+            #state ,t_r, done =racer.step(action)
+            reward+=t_r
+    return (state, reward, done)
 
-# we extract from the lidar signal the angle dir corresponding to maximal distance max_dir from track borders
-# as well as the the distance at adjacent positions.
-
-def max_lidar(observation,angle=np.pi/3,pins=19):
-    arg = np.argmax(observation)
-    dir = -angle / 2 + arg * (angle / (pins - 1))
-    dist = observation[arg]
-    if arg == 0:
-        distl = dist
-    else:
-        distl = observation[arg-1]
-    if arg == pins-1:
-        distr = dist
-    else:
-        distr = observation[arg+1]
-    return(dir,(distl,dist,distr))
-
-def observe(racer_state):
-    if racer_state == None:
-        return np.array([0]) #not used; we could return None
-    else:
-        lidar_signal, v = racer_state
-        dir, (distl,dist,distr) = max_lidar(lidar_signal)
-        return np.array([dir, distl, dist, distr, v])
 
 def train(total_episodes=total_episodes):
     i = 0
@@ -256,40 +256,35 @@ def train(total_episodes=total_episodes):
 
     for ep in range(total_episodes):
 
-        prev_state = observe(racer.reset())
+        prev_state = racer.reset()
         episodic_reward = 0
-        mean_speed += prev_state[4]
+        mean_speed += prev_state[num_states-1]
         done = False
-
         while not(done):
             i = i+1
-
             tf_prev_state = tf.expand_dims(tf.convert_to_tensor(prev_state), 0)
-
             #our policy is always noisy
             action = policy(tf_prev_state)[0]
             # Get state and reward from the environment
-            state, reward, done = racer.step(action)
+            state, reward, done = step(action)
+            
             #we distinguish between termination with failure (state = None) and succesfull termination on track completion
             #succesfull termination is stored as a normal tuple
-            fail = done and state==None
-            state = observe(state)
+            fail = done and len(state)<num_states 
             buffer.record((prev_state, action, reward, fail, state))
             if not(done):
-                mean_speed += state[4]
-
-            buffer.record((prev_state, action, reward, done, state))
+                mean_speed += state[num_states-1]
+        
             episodic_reward += reward
 
-            states,actions,rewards,dones,newstates= buffer.sample_batch()
-            targetQ = rewards + (1-dones)*gamma*(target_critic([newstates,target_actor(newstates)]))
+            if buffer.buffer_counter>batch_size:
+                states,actions,rewards,dones,newstates= buffer.sample_batch()
+                targetQ = rewards + (1-dones)*gamma*(target_critic([newstates,target_actor(newstates)]))
+                loss1 = critic_model.train_on_batch([states,actions],targetQ)
+                loss2 = aux_model.train_on_batch(states)
 
-            loss1 = critic_model.train_on_batch([states,actions],targetQ)
-            loss2 = aux_model.train_on_batch(states)
-
-            update_target(target_actor.variables, actor_model.variables, tau)
-            update_target(target_critic.variables, critic_model.variables, tau)
-
+                update_target(target_actor.variables, actor_model.variables, tau)
+                update_target(target_critic.variables, critic_model.variables, tau)
             prev_state = state
 
         ep_reward_list.append(episodic_reward)
@@ -297,28 +292,27 @@ def train(total_episodes=total_episodes):
         # Mean of last 40 episodes
         avg_reward = np.mean(ep_reward_list[-40:])
         print("Episode {}: Avg. Reward = {}, Last reward = {}. Avg. speed = {}".format(ep, avg_reward,episodic_reward,mean_speed/i))
-
-
+        print("\n")
         avg_reward_list.append(avg_reward)
+        
+        if ep>0 and ep%100 == 0:
+            print("## Evaluating policy ##")
+            tracks.metrics_run(actor_model, 10)
+        
 
     if total_episodes > 0:
         if save_weights:
-            critic_model.save_weights("weights/ddpg_critic_weigths_32_car3_split.h5")
-            actor_model.save_weights("weights/ddpg_actor_weigths_32_car3_split.h5")
+            critic_model.save(weights_file_critic)
+            actor_model.save(weights_file_actor)
         # Plotting Episodes versus Avg. Rewards
         plt.plot(avg_reward_list)
         plt.xlabel("Episode")
         plt.ylabel("Avg. Episodic Reward")
         plt.show()
 
-#train()
+if is_training:
+    train()
 
-def actor(state):
-    print("speed = {}".format(state[1]))
-    state = observe(state)
-    state = tf.expand_dims(state, 0)
-    action = actor_model(state)
-    print("acc = ",action[0,0].numpy())
-    return(action[0])
+tracks.newrun([actor_model])
 
-tracks.newrun(racer,actor)
+
