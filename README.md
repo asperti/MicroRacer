@@ -33,14 +33,6 @@ The project just requires basic libraries: tensorflow, numpy, pyplotlib, scipy.i
 A requirements file is available so you can easily install all the dependencies just using "pip install -r requirements.txt"
 
 ## Plans for future work
-The current version of the MicroRacer is very basic.
-
 We are extremely interested in collaborations, especially with colleagues teaching DRL at other Universities.
-We plan to investigate the following directions
-1. the computation of the lidar signal in pyhton is too slow. We plan to move it to C.
-2. improve the modularity and configurability of the system of rewards 
-3. create a "competion" mode, allowing the simultaneous execution of multiple (independent) cars. This is easy to do, but too slow, at present.
-4. add "chicanes" 
-5. add obstacles, e.g. in the form of other moving vehicles
-6. add a policy-based sample code, in addition to DDPG (e.g. with PPO)
+We plan to organize soon a Championship.
 
