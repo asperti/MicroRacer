@@ -5,22 +5,41 @@ import numpy as np
 
 #basic function for lidar. given a point (x0,y0) on the track and a direction dirang computes the
 #distance of the border along the given direction
-cpdef dist_grid(double x0,double y0,double dirang, map,float step=1./100,verbose=False):
+cpdef dist_grid(double x0,double y0,double dirang, map,float step=1./250,verbose=False):
     cdef double stepx = step*np.cos(dirang)
     cdef double stepy = step*np.sin(dirang)
     cdef double x = x0
     cdef double y = y0
     cdef int xg = int(x * 500) + 650
     cdef int yg = int(y * 500) + 650
+    cdef bint check
+    cdef bint up
+    cdef bint down
+    cdef bint left
+    cdef bint right
+    cdef bint center
+    cdef int i = 0
     if not map[xg,yg]:
         print(x,y,xg,yg)
         print(map[xg,yg])
         assert(map[xg,yg])
-    while (map[xg,yg]):
+    check = map[xg,yg]
+    while (check):
+        if i == 10:
+            step = 1./100
+            stepx = step*np.cos(dirang)
+            stepy = step*np.sin(dirang)
         x += stepx
         y += stepy
         xg = int(x * 500) + 650
         yg = int(y * 500) + 650
+        up = map[xg,yg+1]
+        down = map[xg,yg-1]
+        left = map[xg-1,yg]
+        right = map[xg+1,yg]
+        center = map[xg,yg]
+        check = up and down and left and right
+        i += 1
     x -= stepx
     y -= stepy
     if step == 1./100:
