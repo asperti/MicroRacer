@@ -71,12 +71,15 @@ class Get_actor(tf.keras.Model):
     @property  
     def trainable_variables(self):
         return self.d1.trainable_variables + \
+                self.norm1.trainable_variables + \
                 self.d2.trainable_variables + \
+                self.norm2.trainable_variables + \
                 self.o.trainable_variables 
     @property
     def perturbable_vars(self):
         return self.d1.trainable_variables + \
-                self.d2.trainable_variables
+                self.d2.trainable_variables + \
+                self.o.trainable_variables 
     
 
 #the critic compute the q-value, given the state and the action
@@ -179,9 +182,9 @@ def policy(state,verbose=False):
 # Updates weigths of the perturbed actor inserting noise too
 def get_perturbed_actor_updates(actor, perturbed_actor, param_noise_stddev):
     updates = []
-    for var, perturbed_var in zip(actor.trainable_variables, perturbed_actor.trainable_variables):
+    for var, perturbed_var in zip(actor.perturbable_vars, perturbed_actor.perturbable_vars):
         updates.append(perturbed_var.assign( var + tf.random.normal(tf.shape(var), mean=0., stddev=param_noise_stddev)))
-    assert len(updates) == len(actor.trainable_variables)
+    assert len(updates) == len(actor.perturbable_vars)
     return tf.group(*updates)
 
 # Calculates distance between perturbed actor and clean actor and uses it to update standard deviation
@@ -219,8 +222,11 @@ target_actor(layers.Input(shape=(num_states)))
 
 ## TRAINING ##
 if load_weights:
-    critic_model = keras.models.load_model(weights_file_critic)
-    actor_model = keras.models.load_model(weights_file_actor)
+    critic_model_temp = keras.models.load_model(weights_file_critic)
+    actor_model_temp = keras.models.load_model(weights_file_actor)
+    #saved model doesn't remember perturbable var property so we transfer weigths to a well structured model
+    actor_model.set_weights(actor_model_temp.get_weights())
+    critic_model.set_weights(critic_model_temp.get_weights())
 
 # Making the weights equal initially
 target_actor_weights = actor_model.get_weights()
