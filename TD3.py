@@ -1,3 +1,4 @@
+from datetime import datetime
 import tensorflow as tf
 from tensorflow.keras import layers
 from tensorflow.keras import regularizers
@@ -11,7 +12,7 @@ racer = tracks.Racer()
 ########################################
 ###### HYPERPARAMETERS #################
 
-total_episodes = 200
+total_iterations = 50000
 # Discount factor
 gamma = 0.99
 # Target network parameter update factor, for double DQN
@@ -158,18 +159,23 @@ def policy(state,verbose=False):
 def policy_target(state,verbose=False):
     #the policy used for training just add noise to the action
     #the amount of noise is kept constant during training
-    sampled_action = tf.squeeze(target_actor(tf.expand_dims(state, 0)))
-    noise = np.random.normal(scale=0.1,size=2)
-    #we may change the amount of noise for actions during training
-    noise[0] *= 2
-    noise[1] *= .5
-    noise = np.clip(noise,-noise_clip, noise_clip)
-    # Adding noise to action
-    sampled_action = sampled_action.numpy()
-    sampled_action += noise
-    legal_action = np.clip(sampled_action, lower_bound, upper_bound)
+    newactions = []
+    sampled_action = tf.squeeze(target_actor(state))
+    for a in sampled_action:
+        noise = np.random.normal(scale=0.1,size=2)
+        #we may change the amount of noise for actions during training
+        noise[0] *= 2
+        noise[1] *= .5
+        noise = np.clip(noise,-noise_clip, noise_clip)
+        # Adding noise to action
+        a = a.numpy()
+        a += noise
+        legal_action = np.clip(a, lower_bound, upper_bound)
+        legal_action = np.squeeze(legal_action)
+        newactions.append(legal_action)
 
-    return [np.squeeze(legal_action)]
+    #return [np.squeeze(legal_action)]
+    return np.asarray(tf.squeeze(newactions))
 
 
 buffer = Buffer(buffer_dim, batch_size)
@@ -246,11 +252,12 @@ def step(action):
             reward+=t_r
     return (state, reward, done)
 
-def train(total_episodes=total_episodes):
+def train(total_iterations=total_iterations):
     i = 0
     mean_speed = 0
-
-    for ep in range(total_episodes):
+    ep = 0
+    avg_reward = 0
+    while i<total_iterations:
         prev_state = racer.reset()
         episodic_reward = 0
         mean_speed += prev_state[4]
@@ -276,11 +283,12 @@ def train(total_episodes=total_episodes):
 
             if buffer.buffer_counter>batch_size:
                 states,actions,rewards,dones,newstates= buffer.sample_batch()
-                newactions = []
-                for st in states :
-                    newactions.append(policy_target(st))
-                
-                newactions = np.asarray(tf.squeeze(newactions))
+                #newactions = []
+                #for st in states :
+                #    newactions.append(policy_target(st))
+    
+                #newactions = np.asarray(tf.squeeze(newactions))
+                newactions = policy_target(states)
                 minQ = tf.math.minimum(target_critic([newstates,newactions]), target_critic2([newstates,newactions]))
                 targetQ = rewards + (1-dones)*gamma*(minQ)
 
@@ -295,29 +303,41 @@ def train(total_episodes=total_episodes):
                     update_target(target_critic2.variables, critic2_model.variables, tau)
 
             prev_state = state
+            if i%100 == 0:
+                avg_reward_list.append(avg_reward)
 
         ep_reward_list.append(episodic_reward)
 
         # Mean of last 40 episodes
         avg_reward = np.mean(ep_reward_list[-40:])
-        print("Episode {}: Avg. Reward = {}, Last reward = {}. Avg. speed = {}".format(ep, avg_reward,episodic_reward,mean_speed/i))
+        print("Episode {}: Iterations {}, Avg. Reward = {}, Last reward = {}. Avg. speed = {}".format(ep, i, avg_reward,episodic_reward,mean_speed/i))
         print("\n")
 
-        avg_reward_list.append(avg_reward)
+        if ep>0 and ep%40 == 0:
+            print("## Evaluating policy ##")
+            tracks.metrics_run(actor_model, 10)
+        ep += 1
 
-    if total_episodes > 0:
+    if total_iterations > 0:
         if save_weights:
             critic_model.save(weights_file_critic)
             critic2_model.save(weights_file_critic2)
-            actor_model.save(weights_file_actor)
+            actor_model.save(weights_file_actor) 
         # Plotting Episodes versus Avg. Rewards
         plt.plot(avg_reward_list)
-        plt.xlabel("Episode")
+        plt.xlabel("Training steps x100")
         plt.ylabel("Avg. Episodic Reward")
-        plt.show()
+        plt.ylim(-3.5,7)
+        plt.show(block=False)
+        plt.pause(0.001)
+        print("### TD3 Training ended ###")
+        print("Trained over {} steps".format(i))
 
 if is_training == True:
+    start_t = datetime.now()
     train()
+    end_t = datetime.now()
+    print("Time elapsed: {}".format(end_t-start_t))
     
 
 tracks.newrun([actor_model])
