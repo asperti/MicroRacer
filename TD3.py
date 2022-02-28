@@ -174,7 +174,6 @@ def policy_target(state,verbose=False):
         legal_action = np.squeeze(legal_action)
         newactions.append(legal_action)
 
-    #return [np.squeeze(legal_action)]
     return np.asarray(tf.squeeze(newactions))
 
 
@@ -283,11 +282,6 @@ def train(total_iterations=total_iterations):
 
             if buffer.buffer_counter>batch_size:
                 states,actions,rewards,dones,newstates= buffer.sample_batch()
-                #newactions = []
-                #for st in states :
-                #    newactions.append(policy_target(st))
-    
-                #newactions = np.asarray(tf.squeeze(newactions))
                 newactions = policy_target(states)
                 minQ = tf.math.minimum(target_critic([newstates,newactions]), target_critic2([newstates,newactions]))
                 targetQ = rewards + (1-dones)*gamma*(minQ)
