@@ -197,8 +197,8 @@ target_critic.trainable = False
 
 ## TRAINING ##
 if load_weights:
-    critic_model_temp = keras.models.load_model(weights_file_critic)
-    actor_model_temp = keras.models.load_model(weights_file_actor)
+    critic_model = keras.models.load_model(weights_file_critic)
+    actor_model = keras.models.load_model(weights_file_actor)
 
 # Making the weights equal initially
 target_actor_weights = actor_model.get_weights()
