@@ -1,3 +1,4 @@
+from datetime import datetime
 import tensorflow as tf
 from tensorflow import keras
 from tensorflow.keras import layers
@@ -16,7 +17,7 @@ racer = tracks.Racer()
 ###### HYPERPARAMETERS ######
 #############################
 
-total_episodes = 350
+total_iterations = 50000
 # Discount factor
 gamma = 0.99
 # Target network parameter update factor, for double DQN
@@ -49,57 +50,40 @@ save_weights = True #beware when saving weights to not overwrite previous data
 weights_file_actor = "weights/ddpg2_actor_model_car"
 weights_file_critic = "weights/ddpg2_critic_model_car"
 
-
 #The actor choose the move, given the state
-class Get_actor(tf.keras.Model):
-    def __init__(self):
-        super().__init__()
-        self.d1 = layers.Dense(64, activation="relu")
-        self.norm1 = layers.LayerNormalization()
-        self.d2 = layers.Dense(64, activation="relu")
-        self.norm2 = layers.LayerNormalization()
-        self.o = layers.Dense(num_actions, activation="tanh")
-        
-    def call(self, inputs):
-        out = self.d1(inputs)
-        out = self.norm1(out)
-        out = self.d2(out)
-        out = self.norm2(out)
-        action = self.o(out)
-        return action
-    
-    @property  
-    def trainable_variables(self):
-        return self.d1.trainable_variables + \
-                self.d2.trainable_variables + \
-                self.o.trainable_variables 
-    @property
-    def perturbable_vars(self):
-        return self.d1.trainable_variables + \
-                self.d2.trainable_variables
+def get_actor():
+
+    inputs = layers.Input(shape=(num_states,))
+    out = layers.Dense(64, name="perturbable1", activation="relu")(inputs)
+    out = layers.LayerNormalization()(out)
+    out = layers.Dense(64, name="perturbable2", activation="relu")(out)
+    out = layers.LayerNormalization()(out)
+    outputs = layers.Dense(num_actions, name="perturbable3", activation="tanh")(out)
+
+    model = tf.keras.Model(inputs, outputs, name="actor")
+    return model
     
 
 #the critic compute the q-value, given the state and the action
-class Get_critic(tf.keras.Model):
-    def __init__(self):
-        super().__init__()
-        self.d1 = layers.Dense(64, activation="relu")
-        self.d2 = layers.Dense(64, activation="relu")
-        self.o = layers.Dense(1)
-        
-    def call(self, inputs):
-        state, action = inputs
-        state_action = tf.concat([state, action], axis=1)
-        out = self.d1(state_action)
-        out = self.d2(out)
-        q = self.o(out)
-        return q
-    
-    @property
-    def trainable_variables(self):
-        return self.d1.trainable_variables + \
-                self.d2.trainable_variables + \
-                self.o.trainable_variables
+def get_critic():
+    # State as input
+    state_input = layers.Input(shape=(num_states))
+    state_out = layers.Dense(16, activation="relu")(state_input)
+    state_out = layers.Dense(32, activation="relu")(state_out)
+
+    # Action as input
+    action_input = layers.Input(shape=(num_actions))
+    action_out = layers.Dense(32, activation="relu")(action_input)
+
+    concat = layers.Concatenate()([state_out, action_out])
+
+    out = layers.Dense(64, activation="relu")(concat)
+    out = layers.Dense(64, activation="relu")(out)
+    outputs = layers.Dense(1)(out) #Outputs single value
+
+    model = tf.keras.Model([state_input, action_input], outputs, name="critic")
+
+    return model
 
 #Replay buffer
 class Buffer:
@@ -180,8 +164,8 @@ def policy(state,verbose=False):
 def get_perturbed_actor_updates(actor, perturbed_actor, param_noise_stddev):
     updates = []
     for var, perturbed_var in zip(actor.trainable_variables, perturbed_actor.trainable_variables):
-        updates.append(perturbed_var.assign( var + tf.random.normal(tf.shape(var), mean=0., stddev=param_noise_stddev)))
-    assert len(updates) == len(actor.trainable_variables)
+        if "perturbable" in var.name:
+            updates.append(perturbed_var.assign( var + tf.random.normal(tf.shape(var), mean=0., stddev=param_noise_stddev)))
     return tf.group(*updates)
 
 # Calculates distance between perturbed actor and clean actor and uses it to update standard deviation
@@ -200,22 +184,16 @@ def adapt_param_noise(actor, adaptive_actor, states,current_stddev):
     return current_stddev
 
 #creating models
-actor_model = Get_actor()
-critic_model = Get_critic()
+actor_model = get_actor()
+critic_model = get_critic()
 #actor_model.summary()
 #critic_model.summary()
 
 #we create the target model for double learning (to prevent a moving target phenomenon)
-target_actor = Get_actor()
-target_critic = Get_critic()
+target_actor = get_actor()
+target_critic = get_critic()
 target_actor.trainable = False
 target_critic.trainable = False
-
-
-critic_model([layers.Input(shape=(num_states)),layers.Input(shape=(num_actions))])
-actor_model(layers.Input(shape=(num_states)))
-target_critic([layers.Input(shape=(num_states)),layers.Input(shape=(num_actions))])
-target_actor(layers.Input(shape=(num_states)))
 
 ## TRAINING ##
 if load_weights:
@@ -248,23 +226,15 @@ def compose(actor,critic):
 aux_model = compose(actor_model,target_critic)
 
 # Configure perturbed actor.
-param_noise_actor = Get_actor()
-perturbed_actor_tf = param_noise_actor(layers.Input(shape=(num_states)))
+param_noise_actor = get_actor()
 perturb_policy_ops = get_perturbed_actor_updates(actor_model, param_noise_actor, param_noise_stddev)
 
-
 # Configure separate copy for stddev adoption.
-adaptive_param_noise_actor = Get_actor()
-adaptive_actor_tf = adaptive_param_noise_actor(layers.Input(shape=(num_states)))
+adaptive_param_noise_actor = get_actor()
 perturb_adaptive_policy_ops = get_perturbed_actor_updates(actor_model, adaptive_param_noise_actor, param_noise_stddev)
 
-
-
-critic_optimizer = tf.keras.optimizers.Adam(critic_lr)
-aux_optimizer = tf.keras.optimizers.Adam(aux_lr)
-
-critic_model.compile(loss='mse',optimizer=critic_optimizer)
-aux_model.compile(optimizer=aux_optimizer)
+critic_model.compile(loss='mse',optimizer=tf.keras.optimizers.Adam(critic_lr))
+aux_model.compile(optimizer=tf.keras.optimizers.Adam(aux_lr))
 
 
 buffer = Buffer(buffer_dim, batch_size)
@@ -274,10 +244,6 @@ ep_reward_list = []
 # Average reward history of last few episodes
 avg_reward_list = []
 
-
-def evaluate(times):
-    print("## Evaluating policy ##")
-    tracks.metrics_run(actor_model, times)
 
 # We introduce a probability of doing n empty actions to separate the environment time-step from the agent   
 def step(action):
@@ -292,11 +258,13 @@ def step(action):
     return (state, reward, done)
 
 
-def train(total_episodes=total_episodes):
+def train(total_iterations=total_iterations):
     i = 0
     mean_speed = 0
     current_stddev = param_noise_stddev
-    for ep in range(total_episodes):
+    ep = 0
+    avg_reward = 0
+    while i<total_iterations:
         prev_state = racer.reset()
         episodic_reward = 0
         mean_speed += prev_state[4]
@@ -330,6 +298,9 @@ def train(total_episodes=total_episodes):
                 # We calculate adapted standard devation at every step
                 current_stddev = adapt_param_noise(actor_model, adaptive_param_noise_actor, states,current_stddev)
             prev_state = state
+            
+            if i%100 == 0:
+                avg_reward_list.append(avg_reward)
         
         # We update the perturbed actor parametric noise only after an episode
         perturb_policy_ops = get_perturbed_actor_updates(actor_model, param_noise_actor, current_stddev)
@@ -338,25 +309,33 @@ def train(total_episodes=total_episodes):
 
         # Mean of last 40 episodes
         avg_reward = np.mean(ep_reward_list[-40:])
-        print("Episode {}: Avg. Reward = {}, Last reward = {}. Avg. speed = {}".format(ep, avg_reward,episodic_reward,mean_speed/i))
+        print("Episode {}: Iterations {}, Avg. Reward = {}, Last reward = {}. Avg. speed = {}".format(ep, i, avg_reward,episodic_reward,mean_speed/i))
         print("\n")
-        avg_reward_list.append(avg_reward)
         
-        if ep>0 and ep%100 == 0:
-            evaluate(10)
+        if ep>0 and ep%40 == 0:
+            print("## Evaluating policy ##")
+            tracks.metrics_run(actor_model, 10)
+        ep += 1
 
-    if total_episodes > 0:
+    if total_iterations > 0:
         if save_weights:
             critic_model.save(weights_file_critic)
             actor_model.save(weights_file_actor)
         # Plotting Episodes versus Avg. Rewards
         plt.plot(avg_reward_list)
-        plt.xlabel("Episode")
+        plt.xlabel("Training steps x100")
         plt.ylabel("Avg. Episodic Reward")
-        plt.show()
+        plt.ylim(-3.5,7)
+        plt.show(block=False)
+        plt.pause(0.001)
+        print("### DDPG2 Training ended ###")
+        print("Trained over {} steps".format(i))
 
 if is_training:
+    start_t = datetime.now()
     train()
+    end_t = datetime.now()
+    print("Time elapsed: {}".format(end_t-start_t))
 
 
 tracks.newrun([actor_model])

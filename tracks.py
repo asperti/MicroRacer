@@ -439,7 +439,7 @@ def pilot(actor, state, i):
     return(action[0])
  
 # requires a list of models that returns as first element the action tuple  
-def newrun(actors):
+def newrun(actors, obstacles=True, turn_limit=True, chicanes=True, low_speed_termination=True):
     debug_dir = False
     verbose_action = True
     podium = []
@@ -450,7 +450,7 @@ def newrun(actors):
     xdatas = []
     ydatas = []
     for i, actor in enumerate(actors):
-        racer = Racer()
+        racer = Racer(obstacles, turn_limit, chicanes, low_speed_termination)
         racers.append(racer)
         if i==0:
             states.append(racers[i].reset())
@@ -591,11 +591,12 @@ def newrun(actors):
   
 # launches runs_num evaluations episodes with no plots and measures average steps and rewards   
 # requires a model that returns as first element the action tuple        
-def metrics_run(actor, runs_num = 100):
+def metrics_run(actor, runs_num = 100, obstacles=True, turn_limit=True, chicanes=True, low_speed_termination=True):
     ep_reward_list = []
-    total_steps = []
+    ep_meanspeed_list = []
+    ep_steps_list = []
     completation = 0
-    racer = Racer()
+    racer = Racer(obstacles, turn_limit, chicanes, low_speed_termination)
     i = 0  
     for ep in range(runs_num):
         state = racer.reset()
@@ -617,11 +618,12 @@ def metrics_run(actor, runs_num = 100):
             state = nstate
             episodic_reward += reward       
         ep_reward_list.append(episodic_reward) 
-        total_steps.append(steps)
+        ep_meanspeed_list.append(mean_speed/steps)
+        ep_steps_list.append(steps)
         if racer.completation == 1:
             completation+=1
         print("Episode {}: Steps = {}, Ep. reward = {}. Avg. Ep. speed = {}".format(ep, steps,episodic_reward,mean_speed/steps))
 
     print("Completed episodes: {}/{}".format(completation,runs_num))
-    print("Avg reward over {} episodes: {} / Avg steps {}".format(runs_num, np.mean(ep_reward_list), np.mean(steps)))
+    print("Avg reward over {} episodes = {} / Avg steps = {} / Avg speed = {}".format(runs_num, np.mean(ep_reward_list), np.mean(ep_steps_list), np.mean(ep_meanspeed_list)))
     print("\n")
