@@ -26,7 +26,7 @@ The actor is supposed to answer with two actions, both in the range [-1,1]:
 Maximum values for acceleration and turning angles can be configured. 
 
 ## Available learning models
-We currently equip the code with a basic actor trained with DDPG (weights included). Students are supposed to develop their own models. 
+We currently equip the code with basic actors trained with DDPG, PPO, SAC and DSAC (weights included). Students are supposed to develop their own models. 
 
 ## Requirements
 The project just requires basic libraries: tensorflow, numpy, pyplotlib, scipy.interpolate (for Cubic Splines) and cython. 
