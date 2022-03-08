@@ -36,3 +36,20 @@ A requirements file is available so you can easily install all the dependencies 
 We are extremely interested in collaborations, especially with colleagues teaching DRL at other Universities.
 We plan to organize soon a Championship.
 
+## Race examples
+
+Racers in the legend in order from top to bottom: DDPG, TD3, SAC, PPO.
+
+https://user-images.githubusercontent.com/93991100/157229341-4240de02-38d6-4aca-b50d-a3b9b998d171.mp4
+
+&nbsp;
+
+
+Racers in the legend in order from top to bottom: SAC, DSAC.
+
+
+https://user-images.githubusercontent.com/93991100/157229440-ceb2be76-593c-4c10-9a5e-c4e771f9fdbc.mp4
+
+
+
+
