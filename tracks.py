@@ -461,7 +461,7 @@ def newrun(actors, obstacles=True, turn_limit=True, chicanes=True, low_speed_ter
         ydatas.append([racers[i].cary])
         order.append(racer.cartheta)
     fig, axs = plt.subplots(ncols=2, dpi=180)
-    fig.canvas.manager.window.state('zoomed')
+    #fig.canvas.manager.window.state('zoomed') #not supported on linux
     ax = axs[0]
     #plot map
     ax.imshow(np.rot90(racers[0].map), extent=[-1.3, 1.3, -1.3, 1.3], cmap='gray', vmin=-1, vmax=1)
