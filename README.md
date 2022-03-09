@@ -26,7 +26,7 @@ The actor is supposed to answer with two actions, both in the range [-1,1]:
 Maximum values for acceleration and turning angles can be configured. 
 
 ## Available learning models
-We currently equip the code with a basic actor trained with DDPG (weights included). Students are supposed to develop their own models. 
+We currently equip the code with basic actors trained with DDPG, PPO, SAC and DSAC (weights included). Students are supposed to develop their own models. 
 
 ## Requirements
 The project just requires basic libraries: tensorflow, numpy, pyplotlib, scipy.interpolate (for Cubic Splines) and cython. 
@@ -35,4 +35,21 @@ A requirements file is available so you can easily install all the dependencies 
 ## Plans for future work
 We are extremely interested in collaborations, especially with colleagues teaching DRL at other Universities.
 We plan to organize soon a Championship.
+
+## Race examples
+
+Racers in the legend in order from top to bottom: DDPG, TD3, SAC, PPO.
+
+https://user-images.githubusercontent.com/93991100/157229341-4240de02-38d6-4aca-b50d-a3b9b998d171.mp4
+
+&nbsp;
+
+
+Racers in the legend in order from top to bottom: SAC, DSAC.
+
+
+https://user-images.githubusercontent.com/93991100/157229440-ceb2be76-593c-4c10-9a5e-c4e771f9fdbc.mp4
+
+
+
 
