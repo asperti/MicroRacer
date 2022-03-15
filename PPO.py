@@ -1,4 +1,4 @@
-from os import name
+from datetime import datetime
 import numpy as np
 import tensorflow as tf
 import tensorflow_probability as tfp
@@ -20,7 +20,7 @@ critic_lr = 3e-4
 actor_lr = 3e-4
 
 # Number of episodes
-total_iterations = 400
+total_iterations = 600
 # Mini-batch size for training
 batch_size = 64
 # Number of training steps with the same episode
@@ -50,28 +50,18 @@ class Get_actor(tf.keras.Model):
         self.d2 = layers.Dense(64, activation="tanh")
         self.m = layers.Dense(num_actions, activation="tanh")
         
-    def call(self, s, a=None):
+    def call(self, s):
         out = self.d1(s)
         out = self.d2(out)
         mu = self.m(out)
         sigma = 0.2
-        dist = tfp.distributions.Normal(mu, sigma)
-           
-        if a is None:
-            # Use of the reparameterization trick 
-            a = mu + sigma * tfp.distributions.Normal(0,1).sample(num_actions)   
-        log_pi = dist.log_prob(a)
-        
-        valid_action  = K.clip(a, lower_bound, upper_bound)
-
-        return  mu, sigma, valid_action, log_pi
+        return  mu, sigma
+    
     @property  
     def trainable_variables(self):
-        variables = []
-        variables.extend(self.d1.trainable_variables)
-        variables.extend(self.d2.trainable_variables)
-        variables.extend(self.m.trainable_variables)
-        return variables
+        return self.d1.trainable_variables + \
+                self.d2.trainable_variables + \
+                self.m.trainable_variables
 
 
 #the critic compute the value, given the state 
@@ -150,6 +140,28 @@ class Agent:
         self.ep_reward_list = []
         # Average reward history of last few episodes
         self.avg_reward_list = []
+        # Keep track of how many training steps has been done
+        
+    #Returns an action sampled from the normal distribution returned by the actor and it's relative log probability.
+    #If an action is passed returns it's log probability.
+    def get_action_and_logp(self, states, actions=None):
+        mu, sigma = self.actor_model(states)
+        dist = tfp.distributions.Normal(mu, sigma)
+        if actions is None:
+            # Use of the reparameterization trick 
+            actions = mu + sigma * tfp.distributions.Normal(0,1).sample(num_actions)   
+        log_p = dist.log_prob(actions)
+        
+        if len(log_p.shape)>1:
+            log_p = tf.reduce_sum(log_p,1)
+        else:
+            log_p = tf.reduce_sum(log_p)
+        log_p = tf.expand_dims(log_p, 1)
+        
+        valid_action  = K.clip(actions, lower_bound, upper_bound)
+        
+        return  valid_action, log_p
+        
         
     def gae(self, values, rewards, masks, lastvalue):
         returns = []
@@ -166,22 +178,20 @@ class Agent:
         advantages = (advantages - tf.reduce_mean(advantages)) / (tf.math.reduce_std(advantages) + 1e-8)
         return np.array(returns), advantages
     
-    def update_networks(self): 
-        for e in range(epochs):
-            states, actions, rewards, dones, values, old_logp, batches = self.buffer.sample_batch()
-            returns, advantages = self.gae(values, rewards, dones, 0)
-            
-            # Train using mini-batches
-            for batch in batches:
-                s_batch = tf.convert_to_tensor(states[batch], dtype=tf.float32)
-                a_batch = tf.convert_to_tensor(actions[batch], dtype=tf.float32)
-                adv_batch = tf.expand_dims(tf.convert_to_tensor(advantages.numpy()[batch], dtype=tf.float32),1)
-                ret_batch = tf.convert_to_tensor(returns[batch], dtype=tf.float32)
-                ologp_batch = tf.convert_to_tensor(old_logp[batch], dtype=tf.float32)
-                
+    def update_networks(self, last_value=0): 
+        states, actions, rewards, dones, values, old_logp, batches = self.buffer.sample_batch()
+        returns, advantages = self.gae(values, rewards, dones, last_value)     
+        # Train using mini-batches
+        for batch in batches:
+            s_batch = tf.convert_to_tensor(states[batch], dtype=tf.float32)
+            a_batch = tf.convert_to_tensor(actions[batch], dtype=tf.float32)
+            adv_batch = tf.expand_dims(tf.convert_to_tensor(advantages.numpy()[batch], dtype=tf.float32),1)
+            ret_batch =  tf.expand_dims(tf.convert_to_tensor(returns[batch], dtype=tf.float32),1)
+            ologp_batch = tf.expand_dims(tf.convert_to_tensor(old_logp[batch], dtype=tf.float32),1)
+            for e in range(epochs):
                 with tf.GradientTape() as tape:
                     tape.watch(self.actor_model.trainable_variables)
-                    _,_,_,logp_batch = self.actor_model(tf.stack(s_batch), tf.stack(a_batch)) 
+                    _,logp_batch = self.get_action_and_logp(tf.stack(s_batch), tf.stack(a_batch)) 
                     ratio = tf.exp(logp_batch-ologp_batch)
                     weighted_ratio = ratio*adv_batch
                     weighted_clipped_ratio = tf.clip_by_value(ratio, clip_value_min=1- policy_clip, clip_value_max=1+ policy_clip)*adv_batch
@@ -192,19 +202,19 @@ class Agent:
                 
                 c_loss = self.critic_model.train_on_batch(s_batch,ret_batch)
                 
-            # We use Kullback–Leibler divergence to early stop training epochs
-            _,_,_,logp = self.actor_model(states, actions) 
-            kl = tf.reduce_mean(old_logp-logp)
-            if kl > 1.5*target_kl:
-                print("early stopping - max kl reached at epoch {}".format(e))
-                break
+                # We use approximatation of Kullback–Leibler divergence to early stop training epochs
+                _,logp = self.get_action_and_logp(s_batch, a_batch) 
+                kl = tf.reduce_mean(ologp_batch-logp)
+                if kl > 1.5*target_kl:
+                    print("early stopping - max kl reached at epoch {}".format(e))
+                    break
 
         # We empty the buffer after policy update
         self.buffer.clear()
      
     # We introduce a probability of doing n empty actions to separate the environment time-step from the agent   
     def step(self, action):
-        n = 1
+        n = 2
         t = np.random.randint(0,n)
         state ,reward,done = self.racer.step(action)
         for i in range(t):
@@ -225,7 +235,7 @@ class Agent:
             while not done:    
                 i+=1
                 state = tf.expand_dims(tf.convert_to_tensor(state), 0)
-                mu, sigma, action, logp = self.actor_model(state)
+                action, logp = self.get_action_and_logp(state)
                 value = self.critic_model(state)
                 #action = K.clip(action, lower_bound, upper_bound)
                 action = tf.squeeze(action)
@@ -254,13 +264,18 @@ class Agent:
             plt.plot(self.avg_reward_list)
             plt.xlabel("Episode")
             plt.ylabel("Avg. Episodic Reward")
-            plt.show()
+            plt.ylim(-3.5,7)
+            plt.show(block=False)
+            plt.pause(0.001)
+        print("### PPO Training ended ###")
             
 
     def launch(self):
         if is_training:
+            start_t = datetime.now()
             self.train()
-        #tracks.metrics_run(self.actor_model)
+            end_t = datetime.now()
+            print("Time elapsed: {}".format(end_t-start_t))
         tracks.newrun([self.actor_model])
 
         
