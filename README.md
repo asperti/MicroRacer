@@ -1,3 +1,8 @@
+---
+paper: https://arxiv.org/abs/2203.10494v1
+repository: https://github.com/asperti/MicroRacer/
+---
+
 # MicroRacer
 A didactic car-racer micro environment for Deep Reinforcement Learning
 
